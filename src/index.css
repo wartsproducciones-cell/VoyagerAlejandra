@@ -1,0 +1,9 @@
+@import "tailwindcss";
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Allerta+Stencil&display=swap');
+
+@theme {
+  --font-sans: 'Lato', sans-serif;
+  --font-serif: "American Typewriter", "Courier New", Courier, serif;
+  --font-mono: "American Typewriter", "Courier New", Courier, monospace;
+}

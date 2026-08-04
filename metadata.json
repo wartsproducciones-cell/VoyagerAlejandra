@@ -1,0 +1,10 @@
+{
+  "name": "USA Voyager",
+  "description": "USA Voyager is an AI-powered American English learning platform focused on natural conversation, personalized learning, and optional live lessons with human teachers.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
