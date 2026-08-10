@@ -474,16 +474,19 @@ export const ChatInputBox: React.FC<ChatInputBoxProps> = ({
       setIsListening(false);
     }
 
-    if (currentText.trim()) {
-      if (isConnected && isPaused) {
-        resume();
-      }
-      onSubmitText(currentText.trim());
-      updateText('');
-      setActiveMode('ESCUCHA');
-      setIsEscribeActive(false);
-      setShowVirtualKeyboard(false);
+    const trimmedText = (currentText || '').trim();
+    if (!trimmedText) {
+      return;
     }
+
+    if (isConnected && isPaused) {
+      resume();
+    }
+    onSubmitText(trimmedText);
+    updateText('');
+    setActiveMode('ESCUCHA');
+    setIsEscribeActive(false);
+    setShowVirtualKeyboard(false);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

@@ -3052,8 +3052,10 @@ ${greetingPrompt}`;
     pause={pause}
     resume={resume}
     onSubmitText={(text) => {
-      addUserMessage(text);
-      sendText(text);
+      const trimmed = text ? text.trim() : '';
+      if (!trimmed) return;
+      addUserMessage(trimmed);
+      sendText(trimmed);
     }}
     value={inputText}
     onChangeValue={setInputText}
@@ -3151,9 +3153,11 @@ Pregunta del usuario: "${text}"]`;
  pause={pause}
  resume={resume}
  onSubmitText={(text) => {
- setHasInteracted(true);
- addUserMessage(text);
- sendText(text);
+   const trimmed = text ? text.trim() : '';
+   if (!trimmed) return;
+   setHasInteracted(true);
+   addUserMessage(trimmed);
+   sendText(trimmed);
  }}
  value={inputText}
  onChangeValue={setInputText}

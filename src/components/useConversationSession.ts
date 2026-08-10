@@ -53,7 +53,7 @@ export function useConversationSession(config: UseConversationSessionConfig) {
   const [isConnected, setIsConnected] = useState(false);
   const [statusText, setStatusText] = useState('Disconnected');
   const [error, setError] = useState<string | null>(null);
-  const [isPaused, setIsPaused] = useState(false);
+  const [isPaused, setIsPaused] = useState(true);
   const [secondsElapsed, setSecondsElapsed] = useState(0);
   const [volume, setVolume] = useState(0);
 
@@ -63,7 +63,7 @@ export function useConversationSession(config: UseConversationSessionConfig) {
   const vadRef = useRef<VoiceActivityDetector>(new VoiceActivityDetector());
   const wsRef = useRef<WebSocket | null>(null);
 
-  const isPausedRef = useRef(isPaused);
+  const isPausedRef = useRef(true);
   const isListenOnlyRef = useRef(isListenOnly);
   const onUserTranscriptionRef = useRef(onUserTranscription);
   const onTextResponseRef = useRef(onTextResponse);
