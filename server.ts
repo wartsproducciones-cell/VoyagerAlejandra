@@ -513,23 +513,56 @@ async function startServer() {
             } catch (e) {
               details = "Error serialization failed";
             }
-            logToFile(`Gemini Live API connection closed onclose callback for model ${modelName}. Args: ${details}`);
+            logToFile(`Gemini Live API connection closed callback for model ${modelName}. Code: ${code}, Reason: ${reason}`);
             
             const elapsed = Date.now() - connectedTime;
             if (elapsed < 2500 && modelName === "gemini-3.1-flash-live-preview" && !isTransitioning) {
               logToFile(`Connection closed quickly (${elapsed}ms). Initiating fallback sequence...`);
               triggerFallback();
             } else if (!isTransitioning) {
-              const isNormalOrTimeout = reason.includes("GoAway") || reason.includes("aborted") || reason.includes("session duration") || reason.includes("normal") || code === 1000 || code === 1001;
-              if (isNormalOrTimeout) {
-                logToFile(`Gemini session closed cleanly or timed out: ${reason || code}`);
-                clientWs.send(JSON.stringify({ sessionEnded: true, info: "La sesión de voz finalizó automáticamente." }));
+              const isGoAwayOrTimeout = code === 1008 || 
+                reason.includes("GoAway") || 
+                reason.includes("aborted") || 
+                reason.includes("session duration") || 
+                reason.includes("normal") || 
+                code === 1000 || 
+                code === 1001;
+
+              if (isGoAwayOrTimeout && clientWs.readyState === WebSocket.OPEN) {
+                logToFile(`Gemini Live session reached duration limit/GoAway (code: ${code}). Automatically re-establishing session...`);
+                isTransitioning = true;
+                connectSession(currentModel).then(newSess => {
+                  session = newSess;
+                  isTransitioning = false;
+                  logToFile(`Successfully re-established Gemini Live API session seamlessly.`);
+                }).catch(err => {
+                  isTransitioning = false;
+                  logToFile(`Auto-reconnect after GoAway failed: ${err.message || err}`);
+                  if (clientWs.readyState === WebSocket.OPEN) {
+                    clientWs.send(JSON.stringify({ sessionEnded: true, info: "La sesión de voz finalizó automáticamente." }));
+                    setTimeout(() => { try { clientWs.close(); } catch(e) {} }, 120);
+                  }
+                });
+                return;
+              }
+
+              if (isGoAwayOrTimeout) {
+                logToFile(`Gemini session completed or timed out cleanly (code: ${code}).`);
+                if (clientWs.readyState === WebSocket.OPEN) {
+                  clientWs.send(JSON.stringify({ sessionEnded: true, info: "La sesión de voz finalizó automáticamente." }));
+                }
               } else if (reason) {
-                clientWs.send(JSON.stringify({ error: `La conexión con Gemini se interrumpió: ${reason}` }));
+                if (clientWs.readyState === WebSocket.OPEN) {
+                  clientWs.send(JSON.stringify({ error: `La conexión con Gemini se interrumpió: ${reason}` }));
+                }
               } else if (code === 1007) {
-                clientWs.send(JSON.stringify({ error: "Clave API de Gemini caducada o no válida." }));
+                if (clientWs.readyState === WebSocket.OPEN) {
+                  clientWs.send(JSON.stringify({ error: "Clave API de Gemini caducada o no válida." }));
+                }
               } else {
-                clientWs.send(JSON.stringify({ sessionEnded: true }));
+                if (clientWs.readyState === WebSocket.OPEN) {
+                  clientWs.send(JSON.stringify({ sessionEnded: true }));
+                }
               }
               setTimeout(() => {
                 try { clientWs.close(); } catch(e) {}
