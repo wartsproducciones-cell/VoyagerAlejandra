@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { StripePaymentModal } from './StripePaymentModal';
 import { parseAndRenderEmojis } from './VoyagerEmoji';
+import { ChatInputBox } from './ChatInputBox';
 
 interface TeacherInsightsPanelProps {
   selectedLang: 'EN' | 'ES';
@@ -109,55 +110,132 @@ export const TeacherInsightsPanel: React.FC<TeacherInsightsPanelProps> = ({
   const chatEndRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      if (chatEndRef.current.parentElement) {
+        chatEndRef.current.parentElement.scrollTo({
+          top: chatEndRef.current.parentElement.scrollHeight,
+          behavior: 'smooth'
+        });
+      }
     }
   }, [chatMessages]);
 
   return (
-    <div className="flex-1 flex flex-col bg-neutral-300 max-h-[480px] md:max-h-[550px] overflow-hidden animate-fade-in font-sans text-[#231d17]">
+    <div className="flex-1 flex flex-col bg-white h-full overflow-hidden animate-fade-in font-sans text-[#231d17]">
       
       {/* Scrollable content area */}
-      <div className="flex-1 overflow-y-auto p-4 flex flex-col gap-3.5 min-h-0">
+      <div className="flex-1 overflow-y-auto px-3 pt-2 pb-4 flex flex-col gap-3.5 min-h-0">
         
-        {/* THE MAIN LA PROFE CONTAINER CARD WITH PINK BORDER */}
-        <div className="bg-white border-[5px] border-red-600/30 rounded-[28px] p-5 shadow-sm space-y-4 text-left flex flex-col flex-shrink-0">
+        {/* THE MAIN WELCOME STATEMENT CARD FOR LA PROFE */}
+        <div className="space-y-3.5 text-left flex flex-col flex-shrink-0 p-0">
           
-          {/* Sub-tab Navigation Header Bar */}
-          <div className="flex items-center gap-3 pb-3.5 select-none text-[9.5px] md:text-[10.5px]">
-            {/* Red robot icon */}
-            <Bot className="w-5 h-5 text-red-600 flex-shrink-0" />
-            
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5">
-              {[...(['welcome', 'classes', 'phonetics', 'support', 'hire'] as const)].map((tab) => {
-                const label = 
-                  tab === 'welcome' ? (selectedLang === 'EN' ? 'Welcome' : 'Bienvenido') :
-                  tab === 'classes' ? (selectedLang === 'EN' ? 'Classes' : 'Clases') :
-                  tab === 'phonetics' ? (selectedLang === 'EN' ? 'Phonetics' : 'Fonética') :
-                  tab === 'support' ? (selectedLang === 'EN' ? 'Support' : 'Soporte') :
-                  (selectedLang === 'EN' ? 'Hire' : 'Contrata');
+          {/* Header & Navigation Row */}
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-3 select-none">
+              <span 
+                style={{ fontFamily: '"American Typewriter", "Courier New", Courier, serif' }} 
+                className="text-[42px] md:text-[52.5px] font-normal tracking-tight text-[#1a202c] !font-serif block leading-none"
+              >
+                {selectedLang === 'EN' ? 'La Profe' : 'La Profe'}
+              </span>
+            </div>
 
-                return (
-                  <button 
-                    key={tab}
-                    onClick={() => {
-                      if (activeSubTab !== tab) {
-                        setActiveSubTab(tab);
-                        triggerAutoExplanation(tab);
-                      }
-                    }}
-                    className="flex items-center gap-1 cursor-pointer bg-transparent border-none p-0 focus:outline-none transition-all duration-300 animate-fade-in"
-                  >
-                    {activeSubTab === tab && (
-                      <MessageSquare strokeWidth={3} className="w-3.5 h-3.5 text-red-600 fill-none scale-x-[-1] mt-0.5" />
-                    )}
-                    <span className={activeSubTab === tab ? 'text-black font-extrabold tracking-wider uppercase' : 'text-neutral-400 font-bold tracking-wider hover:text-red-600 transition-colors uppercase'}>
-                      {label}
-                    </span>
-                  </button>
-                );
-              })}
+            <div className="flex flex-wrap items-center gap-4 md:gap-5 text-[11.2px] font-extrabold uppercase tracking-wider select-none mt-1">
+              <button 
+                onClick={() => {
+                  setActiveSubTab('welcome');
+                  triggerAutoExplanation('welcome');
+                }}
+                className={`flex items-center gap-1.5 transition-colors uppercase cursor-pointer bg-transparent border-none p-0 ${
+                  activeSubTab === 'welcome' ? 'text-black font-black' : 'text-black/80 hover:text-red-600'
+                }`}
+              >
+                <Bot className={`w-4.5 h-4.5 ${activeSubTab === 'welcome' ? 'text-red-600' : 'text-black/80'}`} />
+                <span>{selectedLang === 'EN' ? 'WELCOME' : 'BIENVENIDO'}</span>
+              </button>
+
+              <button 
+                onClick={() => {
+                  setActiveSubTab('classes');
+                  triggerAutoExplanation('classes');
+                }}
+                className={`flex items-center gap-1.5 transition-colors uppercase cursor-pointer bg-transparent border-none p-0 ${
+                  activeSubTab === 'classes' ? 'text-black font-black' : 'text-black/80 hover:text-red-600'
+                }`}
+              >
+                <Video className={`w-4.5 h-4.5 ${activeSubTab === 'classes' ? 'text-red-600' : 'text-black/80'}`} />
+                <span>{selectedLang === 'EN' ? 'CLASSES' : 'CLASES'}</span>
+              </button>
+
+              <button 
+                onClick={() => {
+                  setActiveSubTab('phonetics');
+                  triggerAutoExplanation('phonetics');
+                }}
+                className={`flex items-center gap-1.5 transition-colors uppercase cursor-pointer bg-transparent border-none p-0 ${
+                  activeSubTab === 'phonetics' ? 'text-black font-black' : 'text-black/80 hover:text-red-600'
+                }`}
+              >
+                <Sparkles className={`w-4.5 h-4.5 ${activeSubTab === 'phonetics' ? 'text-red-600' : 'text-black/80'}`} />
+                <span>{selectedLang === 'EN' ? 'PHONETICS' : 'FONÉTICA'}</span>
+              </button>
+
+              <button 
+                onClick={() => {
+                  setActiveSubTab('support');
+                  triggerAutoExplanation('support');
+                }}
+                className={`flex items-center gap-1.5 transition-colors uppercase cursor-pointer bg-transparent border-none p-0 ${
+                  activeSubTab === 'support' ? 'text-black font-black' : 'text-black/80 hover:text-red-600'
+                }`}
+              >
+                <MessageSquareText className={`w-4.5 h-4.5 ${activeSubTab === 'support' ? 'text-red-600' : 'text-black/80'}`} />
+                <span>{selectedLang === 'EN' ? 'SUPPORT' : 'SOPORTE'}</span>
+              </button>
+
+              <button 
+                onClick={() => {
+                  setActiveSubTab('hire');
+                  triggerAutoExplanation('hire');
+                }}
+                className={`flex items-center gap-1.5 transition-colors uppercase cursor-pointer bg-transparent border-none p-0 ${
+                  activeSubTab === 'hire' ? 'text-black font-black' : 'text-black/80 hover:text-red-600'
+                }`}
+              >
+                <CreditCard className={`w-4.5 h-4.5 ${activeSubTab === 'hire' ? 'text-red-600' : 'text-black/80'}`} />
+                <span>{selectedLang === 'EN' ? 'HIRE' : 'CONTRATA'}</span>
+              </button>
+
+              <button 
+                onClick={() => {
+                  setActiveSubTab('hire');
+                  setBookingModal('sample');
+                  triggerAutoExplanation('hire');
+                }}
+                className="flex items-center gap-1.5 transition-all uppercase cursor-pointer bg-red-600 hover:bg-red-700 text-white font-extrabold px-3.5 py-1 rounded-full text-[10.5px] border-none shadow-sm sm:ml-auto"
+              >
+                <Award className="w-3.5 h-3.5 text-white" />
+                <span>
+                  {selectedLang === 'EN' ? 'BOOK A CLASS' : 'CONTRATAR CLASE'}
+                </span>
+              </button>
             </div>
           </div>
+
+          {/* Welcome Text Paragraph for La Profe */}
+          <p 
+            style={{ fontFamily: '"American Typewriter", "Courier New", Courier, serif' }} 
+            className="text-[11pt] text-left text-neutral-800 leading-relaxed font-serif pt-1 pb-2"
+          >
+            {selectedLang === 'EN'
+              ? "Welcome to La Profe's section. Here you can explore 1-on-1 live private lessons with Alejandra Francois (La Profe), discover specialized NYC accent phonetics coaching, request direct daily guidance, and book immersion packages."
+              : "Bienvenido a la sección de La Profe. Aquí puedes conocer las clases particulares 1-a-1 en vivo con Alejandra Francois (La Profe), explorar sus programas de fonética y acento de Nueva York, acceder a soporte personalizado directo y contratar paquetes de coaching de inmersión."
+            }
+          </p>
+
+        </div>
+
+        {/* THE MAIN LA PROFE CONTAINER CARD WITH PINK/RED BORDER */}
+        <div className="bg-white border-[5px] border-[#FFD700] rounded-[28px] p-5 shadow-sm space-y-4 text-left flex flex-col flex-shrink-0">
 
           {/* Tab Body Content */}
           <div className="pt-1">
@@ -495,12 +573,26 @@ export const TeacherInsightsPanel: React.FC<TeacherInsightsPanelProps> = ({
 
         </div>
 
-        {/* Separate Chat messages sibling list */}
-        {chatMessages.filter(msg => {
-          if (msg.sender === 'system') return false;
-          if (msg.sender === 'user' && msg.text.startsWith('[')) return false;
-          return true;
-        }).map((msg, index) => {
+        {/* Separate Chat messages sibling list - Only show messages from 'teachers' tab */}
+        {(() => {
+          const teacherMessages = chatMessages.filter(msg => {
+            if (msg.sender === 'system') return false;
+            if (msg.sender === 'user' && msg.text.startsWith('[')) return false;
+            return msg.tab === 'teachers';
+          });
+
+          const messagesToRender = teacherMessages.length > 0 ? teacherMessages : [
+            {
+              id: 'teachers_welcome',
+              sender: 'splash' as const,
+              text: selectedLang === 'EN'
+                ? "Welcome to La Profe's section! Here we discuss private 1-on-1 live lessons with Alejandra Francois, NYC accent coaching, and personalized support. What would you like to know?"
+                : "¡Bienvenido a la sección de La Profe! Aquí conversaremos exclusivamente sobre las clases particulares 1-a-1 en vivo con Alejandra Francois, programas de fonética y acento de Nueva York y soporte personalizado. ¿Qué te gustaría saber hoy sobre La Profe?",
+              tab: 'teachers'
+            }
+          ];
+
+          return messagesToRender.map((msg, index) => {
           const isUser = msg.sender === 'user';
           let displayTxt = msg.text || '';
           
@@ -527,7 +619,7 @@ export const TeacherInsightsPanel: React.FC<TeacherInsightsPanelProps> = ({
                   px-4 py-2.5 rounded-2xl text-sm leading-snug transition-all bg-white border-[5px]
                   ${isUser 
                     ? 'border-blue-600/30 text-black rounded-tr-none' 
-                    : 'border-red-600/30 text-black rounded-tl-none font-serif'
+                    : 'border-[#FFD700] text-black rounded-tl-none font-serif'
                   }
                 `}>
                   {isUser ? (
@@ -567,7 +659,6 @@ export const TeacherInsightsPanel: React.FC<TeacherInsightsPanelProps> = ({
                           <Pause fill="currentColor" stroke="none" className="w-3.5 h-3.5 text-blue-600/70 group-hover:text-red-600 transition-all duration-300" />
                         )}
                       </button>
-                      <User strokeWidth={2.5} className="w-5 h-5 text-blue-600/70" />
                     </div>
                   ) : (
                     <div className="flex items-center gap-2 mb-2 select-none">
@@ -581,50 +672,34 @@ export const TeacherInsightsPanel: React.FC<TeacherInsightsPanelProps> = ({
                         if (parts.length >= 2) {
                           return (
                             <>
-                              <div style={{ fontFamily: '"American Typewriter", "Courier New", Courier, serif' }} className="text-black font-semibold leading-snug">{parseAndRenderEmojis(parts[0])}</div>
-                              <div style={{ fontFamily: '"American Typewriter", "Courier New", Courier, serif' }} className="chat-message-english text-black leading-snug mt-2">
+                              <div style={{ fontFamily: '"Raleway", sans-serif', fontWeight: 600 }} className="text-black font-semibold leading-snug">{parseAndRenderEmojis(parts[0])}</div>
+                              <div style={{ fontFamily: '"Raleway", sans-serif', fontWeight: 600 }} className="chat-message-english text-black font-semibold leading-snug mt-2">
                                 {parseAndRenderEmojis(parts.slice(1).join(" / "))}
                               </div>
                             </>
                           );
                         }
                       }
-                      return <div style={{ fontFamily: '"American Typewriter", "Courier New", Courier, serif' }} className="text-black leading-snug">{parseAndRenderEmojis(displayTxt)}</div>;
+                      return <div style={{ fontFamily: '"Raleway", sans-serif', fontWeight: 600 }} className="text-black font-semibold leading-snug">{parseAndRenderEmojis(displayTxt)}</div>;
                     })()}
                   </div>
                 </div>
               </div>
             </div>
           );
-        })}
-        <div ref={chatEndRef} />
-      </div>
-
-      {/* Row 2: User's Input Box (Styled exactly like the Chat section input box with User icon) */}
-      <div className="flex-shrink-0 px-4 pb-4 select-none flex justify-end w-full">
-        <form 
-          onSubmit={(e) => {
-            e.preventDefault();
-            const inputEl = e.currentTarget.elements.namedItem('teacherQuestion') as HTMLInputElement;
-            if (inputEl && inputEl.value.trim()) {
-              onAskVoyager(inputEl.value.trim());
-              inputEl.value = '';
-            }
-          }}
-          className="w-full relative rounded-2xl rounded-tr-none transition-all bg-white border-[5px] border-blue-600/30 shadow-sm px-4 py-2 flex flex-col"
-        >
-          <div className="flex justify-end items-center gap-1.5 mb-1 text-blue-600/70 select-none">
-            <User strokeWidth={2.5} className="w-5 h-5 text-blue-600/70" />
-          </div>
-          <input
-            type="text"
-            name="teacherQuestion"
-            required
-            placeholder={selectedLang === 'EN' ? "Ask Voyager about Alejandra (La Profe)..." : "Pregúntale a Voyager sobre Alejandra (La Profe)..."}
-            style={{ fontFamily: '"American Typewriter", "Courier New", Courier, serif' }}
-            className="w-full focus:outline-none transition-all border-none bg-transparent text-black text-right placeholder:text-right placeholder:text-black/45 font-serif text-[12.5px] p-0"
+        });
+      })()}
+        <div className="flex justify-end w-full animate-fade-in my-1">
+          <ChatInputBox
+            selectedLang={selectedLang}
+            isConnected={isConnected}
+            isPaused={isPaused}
+            pause={pause}
+            resume={resume}
+            onSubmitText={onAskVoyager}
           />
-        </form>
+        </div>
+        <div ref={chatEndRef} />
       </div>
 
       {/* STRIPE PAYMENT GATEWAY MODAL */}

@@ -7,11 +7,11 @@ import { useConversationModes } from './useConversationModes';
 import { ConversationMode } from './ConversationModes';
 import { ConversationModePolicy } from '../domain/ConversationModePolicy';
 
-export function useConversationEngine(options?: { userName?: string; userAge?: string; userCountry?: string }) {
+export function useConversationEngine(
+  activeTab: string = 'chat',
+  onUserVoiceTranscription?: (text: string) => void
+) {
   const [selectedLang, setSelectedLang] = useState<'EN' | 'ES'>('ES');
-  const userName = options?.userName;
-  const userAge = options?.userAge;
-  const userCountry = options?.userCountry;
 
   // Use the extracted conversation mode manager
   const {
@@ -61,7 +61,7 @@ export function useConversationEngine(options?: { userName?: string; userAge?: s
     addSplashMessage,
     updateUserVoiceTranscription,
     updateAssistantResponse
-  } = useConversationTranscript();
+  } = useConversationTranscript(activeTab);
 
   // Initialize the session hook
   const session = useConversationSession({
@@ -71,13 +71,17 @@ export function useConversationEngine(options?: { userName?: string; userAge?: s
     isListenOnly,
     isSpanishOnlyMode,
     isEnglishOnlyMode,
-    userName,
-    userAge,
-    userCountry,
     memory,
     hasInteracted,
+    userName: profile?.name,
+    userAge: profile?.age ? String(profile.age) : undefined,
+    userCountry: profile?.country,
+    userGoal: profile?.goal,
+    userLevel: profile?.levelEstimate,
     onUserTranscription: (text) => {
-      updateUserVoiceTranscription(text);
+      if (onUserVoiceTranscription) {
+        onUserVoiceTranscription(text);
+      }
       memory.extractLearnerContext(text);
     },
     onTextResponse: (text, showForm) => {
@@ -130,11 +134,6 @@ export function useConversationEngine(options?: { userName?: string; userAge?: s
           setAccentPatterns(prev => {
             if (!prev.includes(accentTips)) {
               createPronunciationEvent(accentTips);
-              addSystemMessage(
-                selectedLang === 'EN'
-                  ? `🗣️ Pronunciation Recommendation:\n${accentTips}`
-                  : `🗣️ Recomendación de Pronunciación:\n${accentTips}`
-              );
               return [...prev, accentTips];
             }
             return prev;
@@ -148,6 +147,10 @@ export function useConversationEngine(options?: { userName?: string; userAge?: s
     },
     onError: (errMsg) => {
       setError(errMsg);
+      addSystemMessage(
+        `⚠️ ${errMsg}`,
+        `msg_sys_err_${Date.now()}`
+      );
     },
     onClose: () => {
       addSystemMessage(
@@ -176,7 +179,7 @@ export function useConversationEngine(options?: { userName?: string; userAge?: s
     }
   }, [session.error]);
 
-  const previousModeRef = useRef<ConversationMode>(activeMode);
+  const previousModeRef = useRef<ConversationMode>('BILINGUAL');
 
   // Centralized tracking and coordination of dynamic mode transitions
   useEffect(() => {
@@ -184,8 +187,8 @@ export function useConversationEngine(options?: { userName?: string; userAge?: s
     if (prevMode !== activeMode) {
       previousModeRef.current = activeMode;
 
-      // Coordinate mode prompt switch with Gemini over WebSocket ONLY if user is already in active chat interaction
-      if (hasInteracted && wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      // Coordinate mode prompt switch with Gemini over WebSocket
+      if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
         const msgText = ConversationModePolicy.getDynamicModeSwitchPrompt(activeMode);
         if (msgText) {
           wsRef.current.send(JSON.stringify({ text: msgText }));
@@ -224,7 +227,7 @@ export function useConversationEngine(options?: { userName?: string; userAge?: s
             chatText = 'ℹ️ Modo Bilingüe activo: VOYAGER responderá en español y lo repetirá en inglés.';
             break;
           case 'SPANISH':
-            chatText = '';
+            chatText = 'ℹ️ Modo Solo Español activo: VOYAGER conversará contigo estrictamente en español.';
             break;
           case 'AMERICAN_ENGLISH':
             chatText = 'ℹ️ Modo Solo Inglés activo: VOYAGER hablará estrictamente en inglés para práctica avanzada.';

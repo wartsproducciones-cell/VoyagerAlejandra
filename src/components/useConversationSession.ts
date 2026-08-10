@@ -10,9 +10,6 @@ interface UseConversationSessionConfig {
   isListenOnly: boolean;
   isSpanishOnlyMode: boolean;
   isEnglishOnlyMode: boolean;
-  userName?: string;
-  userAge?: string;
-  userCountry?: string;
   onUserTranscription: (text: string) => void;
   onTextResponse: (text: string, showForm: boolean) => void;
   onOpen: () => void;
@@ -22,6 +19,11 @@ interface UseConversationSessionConfig {
   onAutoPause?: () => void;
   memory?: ConversationMemory;
   hasInteracted: boolean;
+  userName?: string;
+  userAge?: string;
+  userCountry?: string;
+  userGoal?: string;
+  userLevel?: string;
 }
 
 export function useConversationSession(config: UseConversationSessionConfig) {
@@ -32,9 +34,6 @@ export function useConversationSession(config: UseConversationSessionConfig) {
     isListenOnly,
     isSpanishOnlyMode,
     isEnglishOnlyMode,
-    userName,
-    userAge,
-    userCountry,
     onUserTranscription,
     onTextResponse,
     onOpen,
@@ -44,6 +43,11 @@ export function useConversationSession(config: UseConversationSessionConfig) {
     onAutoPause,
     memory,
     hasInteracted,
+    userName,
+    userAge,
+    userCountry,
+    userGoal,
+    userLevel,
   } = config;
 
   const [isConnected, setIsConnected] = useState(false);
@@ -61,6 +65,12 @@ export function useConversationSession(config: UseConversationSessionConfig) {
 
   const isPausedRef = useRef(isPaused);
   const isListenOnlyRef = useRef(isListenOnly);
+  const onUserTranscriptionRef = useRef(onUserTranscription);
+  const onTextResponseRef = useRef(onTextResponse);
+  const onOpenRef = useRef(onOpen);
+  const onMessageReceivedRef = useRef(onMessageReceived);
+  const onErrorRef = useRef(onError);
+  const onCloseRef = useRef(onClose);
 
   // Keep references updated to avoid closure stale-state issues
   useEffect(() => {
@@ -70,6 +80,15 @@ export function useConversationSession(config: UseConversationSessionConfig) {
   useEffect(() => {
     isListenOnlyRef.current = isListenOnly;
   }, [isListenOnly]);
+
+  useEffect(() => {
+    onUserTranscriptionRef.current = onUserTranscription;
+    onTextResponseRef.current = onTextResponse;
+    onOpenRef.current = onOpen;
+    onMessageReceivedRef.current = onMessageReceived;
+    onErrorRef.current = onError;
+    onCloseRef.current = onClose;
+  });
 
   const recordInteraction = useCallback(() => {
     vadRef.current.recordActivity();
@@ -83,7 +102,6 @@ export function useConversationSession(config: UseConversationSessionConfig) {
       playbackRef.current = new AudioPlayback();
     }
     playbackRef.current.init();
-    captureRef.current.resumeAudioContext();
   }, []);
 
   // Update volume hook using clean domain-level properties
@@ -116,11 +134,14 @@ export function useConversationSession(config: UseConversationSessionConfig) {
       setSecondsElapsed(0);
       return;
     }
+    if (isPaused) {
+      return;
+    }
     const interval = setInterval(() => {
       setSecondsElapsed(prev => prev + 1);
     }, 1000);
     return () => clearInterval(interval);
-  }, [isConnected]);
+  }, [isConnected, isPaused]);
 
   // Clean WebSocket and media resources using domain abstractions
   const disconnect = useCallback(() => {
@@ -186,7 +207,7 @@ export function useConversationSession(config: UseConversationSessionConfig) {
         setStatusText('Connected');
         console.log('WebSocket connection to server established');
         
-        onOpen();
+        onOpenRef.current();
 
         try {
           // Delegate voice capture initialization to AudioCapture
@@ -197,9 +218,27 @@ export function useConversationSession(config: UseConversationSessionConfig) {
             vadRef.current.recordActivity();
             ws.send(JSON.stringify({ audio: base64Data }));
           });
-        } catch (captureErr) {
-          console.error('Audio capture failed to start:', captureErr);
-          onError('Microphone access or initialization failed.');
+        } catch (captureErr: any) {
+          console.warn('Audio capture failed to start:', captureErr);
+          if (captureRef.current) {
+            captureRef.current.stop();
+          }
+          const errStr = String(captureErr?.message || captureErr || '').toLowerCase();
+          const errName = String(captureErr?.name || '');
+          const isPermissionDenied = errName === 'NotAllowedError' || 
+            errName === 'PermissionDeniedError' || 
+            errStr.includes('permission') || 
+            errStr.includes('denied');
+
+          const userErrMsg = isPermissionDenied 
+            ? (selectedLang === 'EN' 
+                ? 'Microphone permission denied. Voice mode is disabled, but you can continue using text chat.' 
+                : 'Permiso de micrófono denegado. El modo de voz está desactivado, pero puedes continuar usando el chat de texto.')
+            : (selectedLang === 'EN'
+                ? 'Microphone initialization failed. You can continue using text chat.'
+                : 'No se pudo iniciar el micrófono. Puedes continuar usando el chat de texto.');
+
+          onErrorRef.current(userErrMsg);
         }
       };
 
@@ -209,38 +248,71 @@ export function useConversationSession(config: UseConversationSessionConfig) {
           const msg = JSON.parse(event.data);
           
           // Relay all specific custom server payloads up
-          onMessageReceived(msg);
+          onMessageReceivedRef.current(msg);
 
           if (msg.status === 'connected') {
             console.log('Gemini session active on backend. Mapping mode instructions via ConversationModePolicy.');
             
-            // Map state variables back to a typed Mode for ConversationModePolicy
-            const currentMode = isBilingualMode ? 'BILINGUAL'
-                              : isTranslateMode ? 'LIVE_TRANSLATOR'
-                              : isListenOnly ? 'LISTEN_ONLY'
-                              : isSpanishOnlyMode ? 'SPANISH'
-                              : isEnglishOnlyMode ? 'AMERICAN_ENGLISH'
-                              : 'BILINGUAL';
+            if (hasInteracted) {
+              // Map state variables back to a typed Mode for ConversationModePolicy
+              const currentMode = isBilingualMode ? 'BILINGUAL'
+                                : isTranslateMode ? 'LIVE_TRANSLATOR'
+                                : isListenOnly ? 'LISTEN_ONLY'
+                                : isSpanishOnlyMode ? 'SPANISH'
+                                : isEnglishOnlyMode ? 'AMERICAN_ENGLISH'
+                                : 'BILINGUAL';
 
-            let greetingPrompt = ConversationModePolicy.getSystemInstructionsForMode(currentMode, {
-              initialPrompt,
-              selectedLang,
-              userName,
-              userAge,
-              userCountry
-            });
+              let greetingPrompt = ConversationModePolicy.getSystemInstructionsForMode(currentMode, {
+                initialPrompt,
+                selectedLang,
+                userName,
+                userAge,
+                userCountry,
+                userGoal,
+                userLevel
+              });
 
-            if (memory) {
-              greetingPrompt += memory.getMemoryPayloadForPrompt();
-            }
-            
-            if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
-              wsRef.current.send(JSON.stringify({ text: greetingPrompt }));
+              if (memory) {
+                greetingPrompt += memory.getMemoryPayloadForPrompt();
+              }
+              
+              if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({ text: greetingPrompt }));
+              }
+            } else {
+              const welcomeSpeech = "¡Bienvenido! Yo soy Voyager, tutor de Inglés Americano. Necesito saber más de ti para servirte mejor. Dime, ¿a qué te dedicas?";
+              const welcomePrompt = `[INSTRUCCIÓN DE SISTEMA MANDATORIA: Estás guiando al usuario en el cuestionario de perfil inicial. 
+Habla en tu voz natural de Voyager y lee en voz alta ÚNICAMENTE el siguiente mensaje en español: "${welcomeSpeech}".
+REGLA CRÍTICA: NO digas nada más, NO saludes con "Hola", NO preguntes "¿Qué te trae por aquí hoy?" ni intentes iniciar una charla casual. Solo di este mensaje claramente y guarda silencio absoluto esperando la respuesta del usuario en la interfaz.]`;
+              
+              const onboardingInstruction = `[INSTRUCCIÓN DE SISTEMA DE SOPORTE DE ONBOARDING: El usuario está completando el formulario. Quédate en silencio y NO respondas a ruidos, habla o ruidos de fondo. Mantén el silencio absoluto hasta recibir una nueva instrucción.]`;
+
+              if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+                wsRef.current.send(JSON.stringify({ text: welcomePrompt }));
+                wsRef.current.send(JSON.stringify({ text: onboardingInstruction }));
+              }
             }
             return;
           }
           
+          if (msg.sessionEnded) {
+            console.log('Session ended gracefully by server:', msg.info);
+            disconnect();
+            return;
+          }
+
           if (msg.error) {
+             const isGoAwayOrAborted = typeof msg.error === 'string' && (
+               msg.error.includes("GoAway") || 
+               msg.error.includes("aborted") || 
+               msg.error.includes("session duration") ||
+               msg.error.includes("GoAway signal")
+             );
+             if (isGoAwayOrAborted) {
+               console.log('Session ended due to timeout or GoAway signal:', msg.error);
+               disconnect();
+               return;
+             }
              console.error('Server reported error:', msg.error);
              setError(msg.error);
              disconnect();
@@ -248,11 +320,11 @@ export function useConversationSession(config: UseConversationSessionConfig) {
           }
 
           if (msg.userTranscription) {
-            onUserTranscription(msg.userTranscription);
+            onUserTranscriptionRef.current(msg.userTranscription);
           }
 
           if (msg.text) {
-            onTextResponse(msg.text, !!msg.showForm);
+            onTextResponseRef.current(msg.text, !!msg.showForm);
           }
 
           if (msg.audio && !isListenOnlyRef.current && !isPausedRef.current) {
@@ -288,11 +360,6 @@ export function useConversationSession(config: UseConversationSessionConfig) {
     isSpanishOnlyMode,
     isEnglishOnlyMode,
     ensureAudioContexts,
-    onUserTranscription,
-    onTextResponse,
-    onMessageReceived,
-    onOpen,
-    onError,
     disconnect
   ]);
 
@@ -307,17 +374,23 @@ export function useConversationSession(config: UseConversationSessionConfig) {
     setIsPaused(true);
     isPausedRef.current = true;
     setVolume(0);
+    if (playbackRef.current) {
+      playbackRef.current.stop();
+    }
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.pause();
+    }
   }, []);
 
   const resume = useCallback(() => {
     setIsPaused(false);
     isPausedRef.current = false;
-    vadRef.current.recordActivity();
-    if (captureRef.current) {
-      captureRef.current.resumeAudioContext();
-    }
     if (playbackRef.current) {
       playbackRef.current.init();
+    }
+    vadRef.current.recordActivity();
+    if (typeof window !== 'undefined' && window.speechSynthesis && window.speechSynthesis.paused) {
+      window.speechSynthesis.resume();
     }
   }, []);
 
@@ -326,12 +399,12 @@ export function useConversationSession(config: UseConversationSessionConfig) {
     if (!isConnected || isPaused) return;
     const interval = setInterval(() => {
       const inactiveMs = vadRef.current.getInactiveMs();
-      if (inactiveMs > 300000) {
-        console.log('Auto-pausing session due to 300s (5min) inactivity tracked by VoiceActivityDetector');
+      if (inactiveMs > 60000) {
+        console.log('Auto-pausing session due to 60s inactivity tracked by VoiceActivityDetector');
         pause();
         if (onAutoPause) onAutoPause();
       }
-    }, 5000);
+    }, 2000);
     return () => clearInterval(interval);
   }, [isConnected, isPaused, pause, onAutoPause]);
 

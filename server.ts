@@ -163,7 +163,7 @@ async function startServer() {
       const connectedTime = Date.now();
 
       const languageInstruction = lang === "ES" 
-        ? "\n\nLANGUAGE CONFIGURATION: The user's preferred language is Spanish (ES). You must speak and explain everything strictly in Spanish as your default, main conversational language. Always explain concepts, rules, mode features, questions, and feedback in Spanish so that a student who does not know English understands completely. Whenever you teach or mention an English word or phrase, immediately explain its meaning in Spanish. Do NOT translate your own Spanish conversational dialogue, responses, or sentences into English. Keep the dialogue entirely in Spanish. Only use English when correcting the user's grammar, teaching specific English vocabulary words (e.g. day lessons), or when the user explicitly asks for a translation. CRITICAL: Do NOT output [SCORES: ...], [LEARNED_WORDS: ...], [ACCENT: ...], or [MISSION_COMPLETE: ...] tags in your initial greeting or welcome response. Only output these tags on subsequent conversational turns after the user has spoken and you are evaluating their input. IMPORTANT: Whenever the conversation language switches (e.g. from Spanish to English), you MUST output the exact tag '[SWITCH_LANG: EN]' in your text transcription. If you switch from English to Spanish, you MUST output '[SWITCH_LANG: ES]'. Do not say these tags out loud, just output them in your text transcription at the start of your turn."
+        ? "\n\nLANGUAGE CONFIGURATION: The user's preferred language is Spanish (ES). You must speak strictly in Spanish as your default, main conversational language. Do NOT translate your own Spanish conversational dialogue, responses, or sentences into English. Keep the dialogue entirely in Spanish. Only use English when correcting the user's grammar, teaching specific English vocabulary words (e.g. day lessons), or when the user explicitly asks for a translation. CRITICAL: Do NOT output [SCORES: ...], [LEARNED_WORDS: ...], [ACCENT: ...], or [MISSION_COMPLETE: ...] tags in your initial greeting or welcome response. Only output these tags on subsequent conversational turns after the user has spoken and you are evaluating their input. IMPORTANT: Whenever the conversation language switches (e.g. from Spanish to English), you MUST output the exact tag '[SWITCH_LANG: EN]' in your text transcription. If you switch from English to Spanish, you MUST output '[SWITCH_LANG: ES]'. Do not say these tags out loud, just output them in your text transcription at the start of your turn."
         : "\n\nLANGUAGE CONFIGURATION: The user's preferred language is English (EN). You should default to speaking and responding in English. However, if you hear people speaking Spanish, ask them if they prefer to switch to Spanish. If they confirm or prefer it, you are authorized to change your language and continue the conversation in Spanish. IMPORTANT: Whenever the conversation language switches (e.g. from English to Spanish), you MUST output the exact tag '[SWITCH_LANG: ES]' in your text transcription. If you switch from Spanish to English, you MUST output '[SWITCH_LANG: EN]'. Do not say these tags out loud, just output them in your text transcription at the start of your turn.";
 
       const newSession = await ai.live.connect({
@@ -449,11 +449,11 @@ async function startServer() {
                       
                       result = { success: true, message: "Progress metrics updated successfully." };
                     } else if (call.name === "google_calendar_book_meeting") {
-                      const args = call.args as any;
-                      const title = args.title as string;
-                      const startISO = args.startISO as string;
-                      const durationMinutes = args.durationMinutes as number || 30;
-                      const attendeeEmail = args.attendeeEmail as string || undefined;
+                      const args = (call.args as any) || {};
+                      const title = (args.title as string) || "English Immersion Lesson with Voyager";
+                      const startISO = (args.startISO as string) || "";
+                      const durationMinutes = Number(args.durationMinutes) || 30;
+                      const attendeeEmail = (args.attendeeEmail as string) || undefined;
                       
                       logToFile(`Tool call google_calendar_book_meeting: ${title} at ${startISO}`);
                       const bookResult = await googleWorkspace.calendarBookMeeting(title, startISO, durationMinutes, attendeeEmail);
@@ -519,41 +519,21 @@ async function startServer() {
             if (elapsed < 2500 && modelName === "gemini-3.1-flash-live-preview" && !isTransitioning) {
               logToFile(`Connection closed quickly (${elapsed}ms). Initiating fallback sequence...`);
               triggerFallback();
-            } else if (!isTransitioning && clientWs.readyState === 1) {
-              const reasonLower = reason.toLowerCase();
-              const isGoAwayOrTimeout = reasonLower.includes("goaway") || 
-                                         reasonLower.includes("duration") || 
-                                         reasonLower.includes("timeout") ||
-                                         reasonLower.includes("aborted");
-
-              if (isGoAwayOrTimeout) {
-                logToFile(`Gemini session closed due to GoAway/timeout (${reason}). Attempting automatic reconnection...`);
-                isTransitioning = true;
-                connectSession(currentModel).then((reconnectedSession) => {
-                  session = reconnectedSession;
-                  isTransitioning = false;
-                  logToFile(`Successfully auto-reconnected Gemini session after GoAway/timeout.`);
-                }).catch((reconnectErr) => {
-                  isTransitioning = false;
-                  logToFile(`Auto-reconnect failed: ${reconnectErr.message || reconnectErr}`);
-                  clientWs.send(JSON.stringify({ 
-                    error: "La sesión de voz expiró. Por favor haz clic en Conectar para continuar." 
-                  }));
-                  setTimeout(() => { try { clientWs.close(); } catch(e) {} }, 120);
-                });
+            } else if (!isTransitioning) {
+              const isNormalOrTimeout = reason.includes("GoAway") || reason.includes("aborted") || reason.includes("session duration") || reason.includes("normal") || code === 1000 || code === 1001;
+              if (isNormalOrTimeout) {
+                logToFile(`Gemini session closed cleanly or timed out: ${reason || code}`);
+                clientWs.send(JSON.stringify({ sessionEnded: true, info: "La sesión de voz finalizó automáticamente." }));
+              } else if (reason) {
+                clientWs.send(JSON.stringify({ error: `La conexión con Gemini se interrumpió: ${reason}` }));
+              } else if (code === 1007) {
+                clientWs.send(JSON.stringify({ error: "Clave API de Gemini caducada o no válida." }));
               } else {
-                if (reason) {
-                  const friendlyMsg = reasonLower.includes("goaway") || reasonLower.includes("duration")
-                    ? "La sesión de voz expiró. Por favor presiona Conectar para continuar."
-                    : `La conexión con Gemini se interrumpió: ${reason}`;
-                  clientWs.send(JSON.stringify({ error: friendlyMsg }));
-                } else if (code === 1007) {
-                  clientWs.send(JSON.stringify({ error: "Clave API de Gemini caducada o no válida." }));
-                }
-                setTimeout(() => {
-                  try { clientWs.close(); } catch(e) {}
-                }, 120);
+                clientWs.send(JSON.stringify({ sessionEnded: true }));
               }
+              setTimeout(() => {
+                try { clientWs.close(); } catch(e) {}
+              }, 120);
             }
           },
           onerror: (err: any) => {
@@ -574,16 +554,15 @@ async function startServer() {
             if (modelName === "gemini-3.1-flash-live-preview" && !isTransitioning) {
               logToFile(`Error occurred on model ${modelName}. Initiating fallback sequence...`);
               triggerFallback();
-            } else if (!isTransitioning && clientWs.readyState === 1) {
-              const rawMsg = err instanceof Error ? err.message : "Live API connection error";
-              const rawLower = rawMsg.toLowerCase();
-              const isGoAwayOrTimeout = rawLower.includes("goaway") || 
-                                         rawLower.includes("duration") || 
-                                         rawLower.includes("aborted");
-              const friendlyMsg = isGoAwayOrTimeout 
-                ? "La sesión de voz expiró. Por favor presiona Conectar para continuar." 
-                : rawMsg;
-              clientWs.send(JSON.stringify({ error: friendlyMsg }));
+            } else if (!isTransitioning) {
+              const clientMsg = err instanceof Error ? err.message : String(err || "Live API connection error");
+              const isGoAwayOrAborted = clientMsg.includes("GoAway") || clientMsg.includes("aborted") || clientMsg.includes("session duration");
+              if (isGoAwayOrAborted) {
+                logToFile(`Gemini Live API error ignored due to GoAway/aborted timeout: ${clientMsg}`);
+                clientWs.send(JSON.stringify({ sessionEnded: true }));
+              } else {
+                clientWs.send(JSON.stringify({ error: "La conexión con Gemini se interrumpió temporalmente." }));
+              }
             }
           }
         }
@@ -636,13 +615,9 @@ async function startServer() {
         const payload = JSON.parse(data.toString());
         if (session && !isTransitioning) {
           if (payload.audio) {
-            try {
-              session.sendRealtimeInput({
-                audio: { data: payload.audio, mimeType: "audio/pcm;rate=16000" }
-              });
-            } catch (audioErr: any) {
-              logToFile(`Error sending realtime audio chunk: ${audioErr.message || audioErr}`);
-            }
+            await session.sendRealtimeInput({
+              audio: { data: payload.audio, mimeType: "audio/pcm;rate=16000" }
+            });
           } else if (payload.text) {
             logToFile(`Relaying client text input to Gemini: ${payload.text}`);
             session.sendClientContent({
@@ -658,7 +633,14 @@ async function startServer() {
         }
       } catch (err: any) {
         logToFile(`Error processing client WebSocket message: ${err.message || err}`);
+        try {
+          clientWs.close();
+        } catch (closeErr) {}
       }
+    });
+
+    clientWs.on("error", (wsErr: any) => {
+      logToFile(`Client WebSocket error: ${wsErr?.message || wsErr}`);
     });
 
     clientWs.on("close", () => {

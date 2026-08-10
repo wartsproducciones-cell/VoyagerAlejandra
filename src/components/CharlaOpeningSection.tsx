@@ -16,15 +16,12 @@ export const getExplanationText = (mode: ConversationMode): string => {
       return "En el modo Bilingüe, respondo a tus mensajes en español y luego repito la idea en inglés. La razón de este método es crear un andamiaje cognitivo natural: te permite comprender el significado exacto en tu idioma nativo sin frustración, mientras asocias inmediatamente el vocabulario, la estructura y la pronunciación en inglés para acelerar tu aprendizaje de forma intuitiva.";
 
     case 'AMERICAN_ENGLISH':
-    case 'ENGLISH':
       return "En el modo Inglés, entramos en inmersión total en inglés americano. La fundamentación pedagógica es entrenar a tu cerebro para pensar directamente en inglés, desarrollando fluidez, agilidad auditiva y eliminando la traducción mental.";
 
     case 'LIVE_TRANSLATOR':
-    case 'TRANSLATOR':
       return "En el modo Traductor, realizo traducción e interpretación simultánea e inmediata de todo lo que escribas o hables. Su objetivo es servir como un puente inmediato cuando necesites saber exactamente cómo expresar una idea en tiempo real.";
 
     case 'LISTEN_ONLY':
-    case 'LISTEN':
       return "En el modo Escucha, me mantengo en silencio sin intervención hablada mientras escucho tu voz. La razón de este modo es ofrecerte un espacio sin presión para practicar tu fluidez oral, recibiendo correcciones por escrito.";
 
     case 'SPANISH':
@@ -58,8 +55,6 @@ export const CharlaOpeningSection: React.FC<CharlaOpeningSectionProps> = ({
     { id: 'LIVE_TRANSLATOR', labelEs: 'TRADUCTOR', labelEn: 'TRANSLATOR' },
     { id: 'LISTEN_ONLY', labelEs: 'ESCUCHA', labelEn: 'LISTEN' },
   ];
-
-  const paragraphText = getExplanationText(activeMode);
 
   return (
     <div className="bg-transparent text-left mb-4 p-2 md:p-3 transition-all duration-300 animate-fade-in select-none">
@@ -111,16 +106,6 @@ export const CharlaOpeningSection: React.FC<CharlaOpeningSectionProps> = ({
                 </button>
               );
             })}
-          </div>
-
-          {/* Written Explanation Paragraph */}
-          <div className="pt-1 animate-fade-in">
-            <p 
-              style={{ fontFamily: '"American Typewriter", "Courier New", Courier, serif' }} 
-              className="text-sm md:text-[15px] leading-relaxed text-[#231d17]"
-            >
-              {paragraphText}
-            </p>
           </div>
         </>
       )}

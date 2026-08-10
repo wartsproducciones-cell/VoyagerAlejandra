@@ -92,17 +92,9 @@ export const VoyagerEmoji: React.FC<VoyagerEmojiProps> = ({ emojiKey, className 
   );
 };
 
-export function sanitizeNonSpanishEnglishScript(text: string): string {
-  if (!text) return text;
-  // Strip Hangul, CJK, Cyrillic, Arabic, Hebrew, Thai, Devanagari, and other non-Latin scripts
-  return text.replace(/[\uAC00-\uD7AF\u1100-\u11FF\u3130-\u318F\u4E00-\u9FFF\u3040-\u30FF\u3400-\u4DBF\u0400-\u04FF\u0600-\u06FF\u0E00-\u0E7F\u0590-\u05FF\u0900-\u097F]/g, '');
-}
-
 // Parser utility
 export function parseAndRenderEmojis(text: string): React.ReactNode {
   if (!text) return "";
-  const sanitizedText = sanitizeNonSpanishEnglishScript(text);
-  if (!sanitizedText) return "";
 
   const keys = Object.keys(EMOJI_MAPPING);
   const unicodes = Object.values(EMOJI_MAPPING)
@@ -114,7 +106,7 @@ export function parseAndRenderEmojis(text: string): React.ReactNode {
 
   const regex = new RegExp(`(${[...escapedKeys, ...escapedUnicodes].join('|')})`, 'g');
 
-  const parts = sanitizedText.split(regex);
+  const parts = text.split(regex);
   return (
     <>
       {parts.map((part, index) => {

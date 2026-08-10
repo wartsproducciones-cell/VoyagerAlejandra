@@ -40,66 +40,40 @@ export class AudioCapture {
 
   async start(onAudioData: (base64Pcm: string) => void): Promise<MediaStream> {
     this.onAudioDataCallback = onAudioData;
-    this.stream = await navigator.mediaDevices.getUserMedia({
-      audio: {
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true
-      }
-    });
-
-    // Initialize AudioContext safely at 16000 Hz or fallback to default hardware rate
     try {
+      this.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+      // Initialize AudioContext at 16000 Hz for input
       this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)({ sampleRate: 16000 });
-    } catch (e) {
-      console.warn('Custom sampleRate 16000 not supported by AudioContext, falling back to default:', e);
-      this.audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
-    }
+      this.analyserNode = this.audioContext.createAnalyser();
+      this.analyserNode.fftSize = 64;
 
-    this.analyserNode = this.audioContext.createAnalyser();
-    this.analyserNode.fftSize = 64;
+      this.sourceNode = this.audioContext.createMediaStreamSource(this.stream);
+      this.processorNode = this.audioContext.createScriptProcessor(4096, 1, 1);
 
-    this.sourceNode = this.audioContext.createMediaStreamSource(this.stream);
-    this.processorNode = this.audioContext.createScriptProcessor(4096, 1, 1);
+      this.processorNode.onaudioprocess = (e) => {
+        if (!this.onAudioDataCallback) return;
 
-    this.processorNode.onaudioprocess = (e) => {
-      if (!this.onAudioDataCallback) return;
+        const resampled = PCMConverter.resample(e.inputBuffer, 16000);
+        const pcm16 = PCMConverter.float32ToPcm16(resampled);
+        const pcmBytes = new Uint8Array(pcm16.buffer);
+        const base64Data = PCMConverter.bytesToBase64(pcmBytes);
 
-      // Auto-resume if browser unexpectedly suspended the audio context
-      if (this.audioContext && this.audioContext.state === 'suspended') {
-        this.audioContext.resume().catch(() => {});
-      }
+        this.onAudioDataCallback(base64Data);
+      };
 
-      const resampled = PCMConverter.resample(e.inputBuffer, 16000);
-      const pcm16 = PCMConverter.float32ToPcm16(resampled);
-      const pcmBytes = new Uint8Array(pcm16.buffer, pcm16.byteOffset, pcm16.byteLength);
-      const base64Data = PCMConverter.bytesToBase64(pcmBytes);
+      this.sourceNode.connect(this.processorNode);
+      this.sourceNode.connect(this.analyserNode);
+      this.processorNode.connect(this.audioContext.destination);
 
-      this.onAudioDataCallback(base64Data);
-    };
-
-    this.sourceNode.connect(this.processorNode);
-    this.sourceNode.connect(this.analyserNode);
-    this.processorNode.connect(this.audioContext.destination);
-
-    if (this.audioContext.state === 'suspended') {
-      try {
+      if (this.audioContext.state === 'suspended') {
         await this.audioContext.resume();
-      } catch (resumeErr) {
-        console.warn('Could not resume AudioContext immediately in start():', resumeErr);
       }
-    }
 
-    return this.stream;
-  }
-
-  async resumeAudioContext(): Promise<void> {
-    if (this.audioContext && this.audioContext.state === 'suspended') {
-      try {
-        await this.audioContext.resume();
-      } catch (e) {
-        console.warn('Failed to resume AudioCapture context:', e);
-      }
+      return this.stream;
+    } catch (err) {
+      this.stop();
+      throw err;
     }
   }
 
@@ -117,9 +91,7 @@ export class AudioCapture {
       this.stream = null;
     }
     if (this.audioContext) {
-      try {
-        this.audioContext.close();
-      } catch (e) {}
+      this.audioContext.close();
       this.audioContext = null;
     }
     this.analyserNode = null;

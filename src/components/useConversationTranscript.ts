@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { ChatMessage } from './LiveAgentTypes';
 
-export function useConversationTranscript() {
+export function useConversationTranscript(activeTab: string = 'chat') {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
 
   const parseImmersionTags = useCallback((text: string) => {
@@ -44,6 +44,9 @@ export function useConversationTranscript() {
       cleaned = cleaned.replace(missionMatch[0], "");
     }
 
+    // 5. Strip non-Spanish/non-English foreign script characters (CJK ideographs, Katakana, Hiragana, Hangul)
+    cleaned = cleaned.replace(/[\u3000-\u303f\u3040-\u309f\u30a0-\u30ff\u4e00-\u9fff\uac00-\ud7af\uff00-\uffef]+/g, '');
+
     return { cleaned, newScores, newLearnedWords, newAccentPattern, newCompletedMission };
   }, []);
 
@@ -56,10 +59,11 @@ export function useConversationTranscript() {
         sender: 'system',
         text,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        timeMs: Date.now()
+        timeMs: Date.now(),
+        tab: activeTab
       }
     ]);
-  }, []);
+  }, [activeTab]);
 
   const addUserMessage = useCallback((text: string, customId?: string) => {
     const id = customId || `msg_text_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
@@ -70,10 +74,11 @@ export function useConversationTranscript() {
         sender: 'user',
         text,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        timeMs: Date.now()
+        timeMs: Date.now(),
+        tab: activeTab
       }
     ]);
-  }, []);
+  }, [activeTab]);
 
   const addSplashMessage = useCallback((text: string, customId?: string) => {
     const id = customId || `msg_splash_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`;
@@ -84,19 +89,21 @@ export function useConversationTranscript() {
         sender: 'splash',
         text,
         timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-        timeMs: Date.now()
+        timeMs: Date.now(),
+        tab: activeTab
       }
     ]);
-  }, []);
+  }, [activeTab]);
 
   const updateUserVoiceTranscription = useCallback((transcriptionText: string) => {
     setChatMessages(prev => {
       const last = prev[prev.length - 1];
-      if (last && last.sender === 'user' && last.id.startsWith('msg_voice_trans_') && (Date.now() - last.timeMs < 6000)) {
+      if (last && last.sender === 'user' && (Date.now() - last.timeMs < 8000)) {
          const updated = [...prev];
+         const separator = last.text && !last.text.endsWith(' ') && !transcriptionText.startsWith(' ') ? ' ' : '';
          updated[updated.length - 1] = {
             ...last,
-            text: last.text + transcriptionText,
+            text: last.text + separator + transcriptionText,
             timeMs: Date.now()
          };
          return updated;
@@ -106,11 +113,12 @@ export function useConversationTranscript() {
             sender: 'user',
             text: transcriptionText,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            timeMs: Date.now()
+            timeMs: Date.now(),
+            tab: activeTab
          }];
       }
     });
-  }, []);
+  }, [activeTab]);
 
   const updateAssistantResponse = useCallback((
     text: string,
@@ -118,11 +126,33 @@ export function useConversationTranscript() {
     onParsedTags: (parsed: any) => void
   ) => {
     setChatMessages(prev => {
+      // If we are in the shopping tab, ignore any model responses until the user has sent a message
+      if (activeTab === 'shopping') {
+        const hasUserMessagedInStore = prev.some(m => m.sender === 'user' && m.tab === 'shopping');
+        if (!hasUserMessagedInStore) {
+          return prev;
+        }
+      }
+
       const last = prev[prev.length - 1];
       const formPattern = /\[SHOW[-_ ]FORM\]|\(SHOW[-_ ]FORM\)/gi;
-      if (last && last.sender === 'splash' && !last.id.startsWith('welcome_') && (Date.now() - last.timeMs < 10000)) {
+      if (last && last.sender === 'splash' && (Date.now() - last.timeMs < 10000)) {
          const updated = [...prev];
-         const combinedText = last.text + text;
+         const isInitialWelcome = last.id.startsWith('welcome_');
+         
+         const separator = (!isInitialWelcome && last.text && 
+           !last.text.endsWith(' ') && 
+           !last.text.endsWith('\n') && 
+           !text.startsWith(' ') && 
+           !text.startsWith('.') && 
+           !text.startsWith(',') && 
+           !text.startsWith('!') && 
+           !text.startsWith('?') &&
+           !text.startsWith(':') &&
+           !text.startsWith(';')
+         ) ? ' ' : '';
+
+         const combinedText = isInitialWelcome ? text : (last.text + separator + text);
          
          const parsed = parseImmersionTags(combinedText);
          onParsedTags(parsed);
@@ -131,6 +161,7 @@ export function useConversationTranscript() {
          const cleanedText = parsed.cleaned.replace(formPattern, "");
          updated[updated.length - 1] = {
             ...last,
+            id: isInitialWelcome ? `msg_${Date.now()}_${Math.random().toString(36).substr(2, 5)}` : last.id,
             text: cleanedText,
             showForm: hasFormTag,
             timeMs: Date.now()
@@ -142,17 +173,26 @@ export function useConversationTranscript() {
 
          const hasFormTag = formPattern.test(parsed.cleaned) || showForm;
          const cleanedText = parsed.cleaned.replace(formPattern, "");
+
+         // Ignore duplicate welcome question text to avoid messy communication
+         const isWelcomeDup = cleanedText.trim().replace(/[¿?¡!]/g, '').toLowerCase() === "en que te puedo ayudar hoy" || 
+                              cleanedText.trim().replace(/[?]/g, '').toLowerCase() === "how can i help you today";
+         if (isWelcomeDup && prev.some(m => m.id === 'welcome_store')) {
+           return prev;
+         }
+
          return [...prev, {
             id: `msg_${Date.now()}_${Math.random()}`,
             sender: 'splash',
             text: cleanedText,
             showForm: hasFormTag,
             timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
-            timeMs: Date.now()
+            timeMs: Date.now(),
+            tab: activeTab
          }];
       }
     });
-  }, [parseImmersionTags]);
+  }, [parseImmersionTags, activeTab]);
 
   return {
     chatMessages,
