@@ -22,6 +22,8 @@ interface ChatInputBoxProps {
   setIsTranslateMode?: (v: boolean) => void;
   isListenOnly?: boolean;
   setIsListenOnly?: (v: boolean) => void;
+  isLiveVoiceActive?: boolean;
+  onToggleLiveVoice?: () => void;
 }
 
 interface VirtualKeyboardProps {
@@ -221,7 +223,9 @@ export const ChatInputBox: React.FC<ChatInputBoxProps> = ({
   isTranslateMode,
   setIsTranslateMode,
   isListenOnly,
-  setIsListenOnly
+  setIsListenOnly,
+  isLiveVoiceActive,
+  onToggleLiveVoice
 }) => {
   const [internalText, setInternalText] = useState('');
   const [activeMode, setActiveMode] = useState<'ESCUCHA' | 'DICTA' | 'ESCRIBE'>('ESCUCHA');
@@ -395,6 +399,9 @@ export const ChatInputBox: React.FC<ChatInputBoxProps> = ({
     setActiveMode('ESCUCHA');
     if (isConnected && isPaused) {
       resume();
+    }
+    if (onToggleLiveVoice) {
+      onToggleLiveVoice();
     }
   };
 
@@ -695,13 +702,15 @@ export const ChatInputBox: React.FC<ChatInputBoxProps> = ({
               </button>
             )}
 
-            {/* Secondary Button: Voice interaction mode */}
+            {/* Secondary Button: Voice interaction mode (Go Live) */}
             <button
               type="button"
               onClick={handleEscuchaClick}
-              title={selectedLang === 'EN' ? 'Voice interaction mode' : 'Modo de voz interactivo'}
+              title={selectedLang === 'EN' ? 'Go Live Voice Mode (ChatGPT style)' : 'Modo de Voz en Vivo (Estilo ChatGPT)'}
               className={`p-1.5 rounded-full transition-all duration-300 cursor-pointer flex items-center justify-center ${
-                activeMode === 'ESCUCHA' && isConnected && !isPaused
+                isLiveVoiceActive
+                  ? 'bg-amber-500 text-black shadow-lg scale-110 animate-pulse ring-2 ring-amber-300'
+                  : activeMode === 'ESCUCHA' && isConnected && !isPaused
                   ? 'bg-[#1A365D] text-white shadow-md scale-105'
                   : 'bg-neutral-100 text-neutral-600 hover:text-[#1A365D] hover:bg-neutral-200 active:scale-95'
               }`}

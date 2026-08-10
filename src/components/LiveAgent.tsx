@@ -14,7 +14,7 @@ import { ChatInputBox } from './ChatInputBox';
 import { AuthModal } from './AuthModal';
 import voyagerRobot from '../assets/images/voyager_robot_1783082204380.png';
 import chatAvatarIcon from '../assets/images/voyager_pixel_avatar_1784465509169.jpg';
-import { Compass, MapPin, Languages, Sparkles, ArrowLeft, ArrowRight, Headphones, MessageSquare, User, Settings, Sliders, ShoppingBag, Globe, Apple, Home, Pause, Play, Info, Shield, FileText, Bot, Eye, EyeOff, ShoppingCart, Briefcase, BookOpen, Luggage, Rocket, Check, UserCheck, Presentation, MessageSquareText, Plane, Sprout, Flower, TreeDeciduous, GraduationCap, Award, Mail, Menu, X, Power } from 'lucide-react';
+import { Compass, MapPin, Languages, Sparkles, ArrowLeft, ArrowRight, Headphones, AudioLines, MessageSquare, User, Settings, Sliders, ShoppingBag, Globe, Apple, Home, Pause, Play, Info, Shield, FileText, Bot, Eye, EyeOff, ShoppingCart, Briefcase, BookOpen, Luggage, Rocket, Check, UserCheck, Presentation, MessageSquareText, Plane, Sprout, Flower, TreeDeciduous, GraduationCap, Award, Mail, Menu, X, Power } from 'lucide-react';
 
 import { ChatMessage, Lead, TravelDestination, PronunciationFeedbackEvent, ConversationEvent } from './LiveAgentTypes';
 import { TRAVEL_PRESETS } from './TravelPresets';
@@ -593,6 +593,8 @@ const LiveAgent: React.FC<LiveAgentProps> = ({ isWidgetMode = false, onClose }) 
 
  // Particle visualizer canvas refs & loop
  const particleCanvasRef = useRef<HTMLCanvasElement | null>(null);
+ const coverParticleCanvasRef = useRef<HTMLCanvasElement | null>(null);
+ const [isLiveVoiceActive, setIsLiveVoiceActive] = useState<boolean>(false);
  const volumeRef = useRef(0);
  volumeRef.current = volume;
  const reminderTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -635,21 +637,24 @@ const LiveAgent: React.FC<LiveAgentProps> = ({ isWidgetMode = false, onClose }) 
  }
 
  const renderLoop = () => {
- const canvas = particleCanvasRef.current;
- if (!canvas) {
+ const activeCanvases = [particleCanvasRef.current, coverParticleCanvasRef.current].filter(Boolean) as HTMLCanvasElement[];
+ if (activeCanvases.length === 0) {
  animationFrameId = requestAnimationFrame(renderLoop);
  return;
  }
 
+ time += 1;
+ const currentVolume = volumeRef.current;
+
+ for (const canvas of activeCanvases) {
  const ctx = canvas.getContext('2d');
- if (!ctx) return;
+ if (!ctx) continue;
 
  const width = canvas.width;
  const height = canvas.height;
  const centerX = width / 2;
  const centerY = height / 2;
  const scale = width / 360;
- const currentVolume = volumeRef.current;
 
  ctx.clearRect(0, 0, width, height);
 
@@ -668,7 +673,6 @@ const LiveAgent: React.FC<LiveAgentProps> = ({ isWidgetMode = false, onClose }) 
  ctx.fill();
 
  // Shimmering dust particles
- time += 1;
  for (let i = 0; i < numParticles; i++) {
  let p = particles[i];
  let speedMultiplier = 1.0 + (currentVolume * 0.08);
@@ -707,6 +711,7 @@ const LiveAgent: React.FC<LiveAgentProps> = ({ isWidgetMode = false, onClose }) 
  ctx.shadowBlur = (6 + (currentVolume / 100) * 8) * scale;
  ctx.shadowColor = '#ffd700';
  ctx.fill();
+ }
  }
 
  animationFrameId = requestAnimationFrame(renderLoop);
@@ -2578,10 +2583,88 @@ ${greetingPrompt}`;
  </div>
  </div>
           
-  ) : rightPanelTab === 'chat' ? (
+   ) : rightPanelTab === 'chat' ? (
  <div className="flex-grow flex flex-col overflow-hidden h-full">
 
  <div className="flex-1 px-0.5 sm:px-1.5 pt-1 pb-2 tab-content-area overflow-y-auto min-h-0">
+ {isLiveVoiceActive ? (
+   <div className="flex-1 flex flex-col items-center justify-between p-4 sm:p-5 text-center animate-fade-in relative overflow-hidden bg-gradient-to-b from-[#0B1B3D] via-[#0D224A] to-[#061126] rounded-3xl border border-amber-500/30 shadow-[0_15px_50px_rgba(0,0,0,0.7)] my-1 min-h-[380px] w-full">
+     {/* Live Status Top Bar */}
+     <div className="flex items-center justify-between w-full px-3 py-2 bg-black/40 border border-white/10 rounded-2xl backdrop-blur-md">
+       <div className="flex items-center gap-2">
+         <span className="relative flex h-3 w-3">
+           <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+           <span className="relative inline-flex rounded-full h-3 w-3 bg-emerald-500"></span>
+         </span>
+         <span style={{ fontFamily: '"Allerta Stencil", sans-serif' }} className="text-xs sm:text-sm font-bold text-amber-400 tracking-wider uppercase">
+           VOYAGER LIVE
+         </span>
+         <span className="text-[10px] text-white/60 font-mono hidden sm:inline-block">
+           ({selectedLang === 'EN' ? 'Voice Mode' : 'Modo Voz Continuo'})
+         </span>
+       </div>
+       <button
+         onClick={() => setIsLiveVoiceActive(false)}
+         className="px-3 py-1 bg-white/10 hover:bg-white/20 text-white text-[10px] font-semibold rounded-full border border-white/20 transition-all cursor-pointer hover:scale-105 active:scale-95"
+       >
+         {selectedLang === 'EN' ? 'Exit Live' : 'Volver al Chat'}
+       </button>
+     </div>
+
+     {/* Center Sound Bubble Canvas */}
+     <div className="relative flex-1 flex flex-col items-center justify-center my-2 w-full">
+       <div className="absolute inset-0 rounded-full bg-amber-500/10 blur-3xl animate-pulse pointer-events-none" />
+       <canvas
+         ref={coverParticleCanvasRef}
+         width={720}
+         height={720}
+         className="z-10 w-44 h-44 sm:w-56 sm:h-56 max-w-full object-contain animate-float-zero-g"
+       />
+
+       {/* Voice Wave Visualizer Bars */}
+       <div className="flex items-center justify-center gap-1 mt-2">
+         {[0.4, 0.7, 1.0, 0.6, 0.9, 0.5, 0.8, 0.3].map((heightFactor, i) => (
+           <div
+             key={i}
+             className="w-1 bg-amber-400 rounded-full transition-all duration-75"
+             style={{
+               height: `${Math.max(6, Math.min(32, (volume * heightFactor * 0.8) + 8))}px`,
+               opacity: volume > 5 ? 0.9 : 0.4
+             }}
+           />
+         ))}
+       </div>
+
+       <span className="text-xs font-mono font-medium text-amber-300 mt-2 block animate-pulse">
+         {volume > 15
+           ? (selectedLang === 'EN' ? 'Listening to you...' : 'Escuchando tu voz...')
+           : (selectedLang === 'EN' ? 'Speak freely with Voyager...' : 'Habla libremente con Voyager...')}
+       </span>
+     </div>
+
+     {/* Realtime Subtitle Banner (Latest Spoken Line) */}
+     {chatMessages.filter(m => !m.tab || m.tab === 'chat').slice(-1)[0] && (
+       <div className="w-full max-w-lg mx-auto bg-black/60 border border-amber-500/20 backdrop-blur-md rounded-2xl p-3 text-left shadow-lg animate-fade-in">
+         <div className="flex items-center gap-1.5 mb-1 text-[10px] font-bold text-amber-400 tracking-wider uppercase">
+           {chatMessages.filter(m => !m.tab || m.tab === 'chat').slice(-1)[0].sender === 'user' ? (
+             <>
+               <User className="w-3 h-3 text-blue-400" />
+               <span>{selectedLang === 'EN' ? 'YOU SAID' : 'TÚ DIJISTE'}</span>
+             </>
+           ) : (
+             <>
+               <AudioLines className="w-3 h-3 text-amber-400" />
+               <span>VOYAGER</span>
+             </>
+           )}
+         </div>
+         <p className="text-xs text-white/90 leading-relaxed font-normal line-clamp-3">
+           {chatMessages.filter(m => !m.tab || m.tab === 'chat').slice(-1)[0].text}
+         </p>
+       </div>
+     )}
+   </div>
+ ) : (
  <div className="min-h-full flex flex-col justify-start space-y-4">
  {chatMessages.filter(msg => !msg.tab || msg.tab === 'chat').map((msg, index) => {
  if (msg.sender === 'system') {
@@ -3043,6 +3126,8 @@ ${greetingPrompt}`;
  </div>
  );
  })}
+ </div>
+ )}
   {!showReviewScreen && hasInteracted && (
   <div className="flex justify-end w-full animate-fade-in my-1">
   <ChatInputBox
@@ -3071,11 +3156,17 @@ ${greetingPrompt}`;
     setIsTranslateMode={setIsTranslateMode}
     isListenOnly={isListenOnly}
     setIsListenOnly={setIsListenOnly}
+    isLiveVoiceActive={isLiveVoiceActive}
+    onToggleLiveVoice={() => {
+      setIsLiveVoiceActive(prev => !prev);
+      if (isConnected && isPaused) {
+        resume();
+      }
+    }}
   />
   </div>
   )}
  <div ref={chatEndRef} />
- </div>
  </div>
  </div>
  ) : rightPanelTab === 'roadmap' ? (
@@ -3172,6 +3263,13 @@ Pregunta del usuario: "${text}"]`;
  setIsTranslateMode={setIsTranslateMode}
  isListenOnly={isListenOnly}
  setIsListenOnly={setIsListenOnly}
+ isLiveVoiceActive={isLiveVoiceActive}
+ onToggleLiveVoice={() => {
+   setIsLiveVoiceActive(prev => !prev);
+   if (isConnected && isPaused) {
+     resume();
+   }
+ }}
  />
  </div>
  ) : rightPanelTab === 'settings' ? (
